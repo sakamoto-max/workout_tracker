@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
+
 	"net/http"
 	"workout_tracker/database"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5"
 )
 
 
@@ -34,6 +33,6 @@ type ExercisesStruct struct{
 }
 
 func GetAllExercises(w http.ResponseWriter, r *http.Request) {
-	
+
 
 }
