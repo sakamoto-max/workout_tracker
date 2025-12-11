@@ -9,7 +9,7 @@ import (
 
 var DBConn *pgxpool.Pool
 
-const DataBaseURL string = "postgresql://postgres:root@localhost:5432/WORKOUT_TRACKER"
+const DataBaseURL string = "postgresql://postgres:root@localhost:5432/workout"
 
 func makeDBPool() (*pgxpool.Pool, error) {
 	conn, err := pgxpool.New(context.Background(), DataBaseURL)
