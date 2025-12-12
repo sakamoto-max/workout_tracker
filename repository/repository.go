@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"workout_tracker/database"
 	"workout_tracker/models"
 
@@ -21,7 +22,7 @@ func GetAllExercisesFromDB() (pgx.Rows, error) {
 }
 
 func CreateUserInDB(user models.User) error {
-	
+
 	_, err := database.DBConn.Exec(context.Background(), `
 		INSERT INTO USERS(NAME, EMAIL, HASHED_PASSWORD, ROLE, CREATED_AT, UPDATED_AT)
 		VALUES($1, $2, $3, $4, NOW(), NOW())
@@ -39,7 +40,7 @@ func GetUserFromDb(email string) (models.User, error) {
 		SELECT ID, NAME, EMAIL, ROLE, CREATED_AT, UPDATED_AT
 		FROM USERS	
 		WHERE EMAIL = $1
-	`,email).Scan(&userDetailsFromDb.Id, &userDetailsFromDb.Name, &userDetailsFromDb.Email, &userDetailsFromDb.Role, &userDetailsFromDb.CreatedAt, &userDetailsFromDb.UpdatedAt)
+	`, email).Scan(&userDetailsFromDb.Id, &userDetailsFromDb.Name, &userDetailsFromDb.Email, &userDetailsFromDb.Role, &userDetailsFromDb.CreatedAt, &userDetailsFromDb.UpdatedAt)
 
 	if err != nil {
 		return userDetailsFromDb, err
@@ -48,4 +49,179 @@ func GetUserFromDb(email string) (models.User, error) {
 	userDetailsFromDb.Password = "confidential"
 
 	return userDetailsFromDb, nil
+}
+
+func GetHashedPassFromDB(email string) (string, error) {
+	var hashedpass string
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT HASHED_PASSWORD FROM USERS
+		WHERE EMAIL = $1
+	`, email).Scan(&hashedpass)
+	if err != nil {
+		return "", err
+	}
+
+	return hashedpass, nil
+}
+
+// user -> create plan -> plan_name -> will give-> plan_id
+// exercise_tracker -> insert all the exercises
+// get all the ids
+// insert plan_id, all the exercise tracker ids in plan
+
+func CreateAPlanInWorkOutPlans(user_id int, planName string) (int, error) {
+	var planId int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		INSERT INTO WORKOUTPLANS(USER_ID, PLAN_NAME)
+		VALUES($1, $2)
+	`, user_id, planName).Scan(&planId)
+
+	if err != nil {
+		return planId, err
+	}
+	return planId, nil
+}
+
+func InsertExercisesIntoTracker(exerciseName []string) ([]int, error) {
+
+	var exerciseTracerIds []int
+
+	for _, v := range exerciseName {
+
+		var exerciseTracerId int
+
+		err := database.DBConn.QueryRow(context.Background(), `
+			INSERT INTO EXERCISE_TRACKER(EXERCISE_NAME)
+			VALUES($1)
+			RETURNING ID
+		`, v).Scan(&exerciseTracerId)
+
+		if err != nil {
+			return exerciseTracerIds, err
+		}
+
+		exerciseTracerIds = append(exerciseTracerIds, exerciseTracerId)
+	}
+
+	return exerciseTracerIds, nil
+}
+
+func InsertIntoPlan(planId int, exerciserTrackerIds []int) error {
+
+	for _, v := range exerciserTrackerIds {
+		_, err := database.DBConn.Exec(context.Background(), `
+			INSERT INTO PLAN(PLAN_ID, EXERCISE_TRACKER_ID)
+			VALUES($1, $2)
+		`, planId, v)
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func EeAaO(userId int, planName string, exerciseNames []string) error {
+
+	var planId int
+
+	var exerciseTrackerIds []int
+
+	trnx, err := database.DBConn.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+
+	err = trnx.QueryRow(context.Background(), `
+		INSERT INTO WORKOUTPLANS(USER_ID, PLAN_NAME)
+		VALUES($1, $2)
+		RETURNING ID
+	`, userId, planName).Scan(&planId)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("planID is : %V", planId)
+
+	for _, v := range exerciseNames {
+
+		var exerciseTracerId int
+
+		err := trnx.QueryRow(context.Background(), `
+			INSERT INTO EXERCISE_TRACKER(EXERCISE_NAME)
+			VALUES($1)
+			RETURNING ID
+		`, v).Scan(&exerciseTracerId)
+
+		if err != nil {
+			return err
+		}
+
+		exerciseTrackerIds = append(exerciseTrackerIds, exerciseTracerId)
+	}
+
+	fmt.Printf("exer ids : %v", exerciseTrackerIds)
+
+	for _, v := range exerciseTrackerIds {
+		_, err := trnx.Exec(context.Background(), `
+			INSERT INTO PLAN(PLAN_ID, EXERCISE_TRACKER_ID)
+			VALUES($1, $2)
+		`, planId, v)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	err = trnx.Commit(context.Background())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetUserIdFromDB(email string) (int, error) {
+
+	var userId int
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT ID FROM USERS
+		WHERE EMAIL = $1
+	`, email).Scan(&userId)
+	if err != nil {
+		return userId, err
+	}
+
+	return userId, nil
+}
+func GetUserRoleFromDB(email string) (string, error) {
+
+	var userRole string
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT ROLE FROM USERS
+		WHERE EMAIL = $1
+	`, email).Scan(&userRole)
+	if err != nil {
+		return userRole, err
+	}
+
+	return userRole, nil
+}
+
+func InsertANewExerciseInDB(exerciseName string, exercisetype string, bodyPart string) (models.Exercise, error) {
+
+	var exercise models.Exercise
+	err := database.DBConn.QueryRow(context.Background(), `
+		INSERT INTO EXERCISES(EXERCISE_NAME, TYPE, BODY_PART)
+		VALUES($1, $2, $3)
+		RETURNING ID, EXERCISE_NAME, TYPE, BODY_PART
+	`, exerciseName, exercisetype, bodyPart).Scan(&exercise.Id, &exercise.ExerciseName, &exercise.Type, &exercise.BodyPart)
+
+	if err != nil {
+		return exercise, err
+	}
+
+	return exercise, nil
+
 }

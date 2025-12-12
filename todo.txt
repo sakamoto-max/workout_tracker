@@ -1,7 +1,4 @@
-1. stopped at GEt all exercises
-2. continue from there
-
-
+cookie verification // need to be doe
 
 
 This project involves creating a backend system for a workout tracker application where users can sign up, log in, create workout plans, and 

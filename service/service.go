@@ -1,9 +1,15 @@
 package service
 
 import (
+	"errors"
+	"strings"
 	"workout_tracker/models"
 	"workout_tracker/repository"
 	"workout_tracker/utils"
+)
+
+var (
+	ErrOnlyAdminAccess = errors.New("only admin can modify this")
 )
 
 func GetAllExercisesService() (models.AllExercises, error) {
@@ -64,4 +70,44 @@ func UserSignupService(user models.User) (models.User, error ){
 	}
 
 	return userDetailsFromDb, nil
+}
+
+func UserLoginService(userSentDetails models.User) (error) {
+
+	// compare the passwords
+	err := utils.PasswordMatcher(userSentDetails.Email, userSentDetails.Password)
+	
+	if err != nil{
+		return err
+	}else {
+		return nil
+	}	
+}
+
+func CreatePlanService(userSentExercises models.UserSentExercises) error {
+
+	err := repository.EeAaO(userSentExercises.UserId, userSentExercises.PlanName, userSentExercises.ExercisesNames)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func InsertANewExerciseService(newExercise models.Exercise) (models.Exercise,error) {
+
+	var response models.Exercise
+	if strings.ToUpper(newExercise.UserRole) == "ADMIN" {
+		responseFromdb, err := repository.InsertANewExerciseInDB(newExercise.ExerciseName, newExercise.Type, newExercise.BodyPart)
+		if err != nil{
+			return responseFromdb, err
+		}
+
+		response = responseFromdb
+		response.UserRole = "Admin"
+	}else {
+		return response, ErrOnlyAdminAccess
+	}
+
+	return response, nil
 }
