@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"time"
+	"workout_tracker/models"
 	"workout_tracker/repository"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -11,11 +12,7 @@ import (
 // what should the jwt token contain?
 // user_id
 
-type UserClaims struct {
-	UserId int    `json:"user_id"`
-	Role   string `json:"role"`
-	jwt.RegisteredClaims
-}
+
 
 var (
 	ErrTokenIsInvalid = errors.New("token is invalid")
@@ -34,7 +31,7 @@ func GenerateJwtToken(email string) (string, error) {
 		return "", err
 	}
 
-	newClaims := UserClaims{
+	newClaims := models.UserClaims{
 		UserId: userId,
 		Role:   userRole,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -52,9 +49,9 @@ func GenerateJwtToken(email string) (string, error) {
 	return signedToken, nil
 }
 
-func VerifyJwtToken(token string) (*UserClaims, error) {
+func VerifyJwtToken(token string) (*models.UserClaims, error) {
 
-	claims := &UserClaims{}
+	claims := &models.UserClaims{}
 	parsedToken, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
 		return []byte(SECRET_KEY), nil
 	})

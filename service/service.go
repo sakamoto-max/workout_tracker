@@ -2,10 +2,13 @@ package service
 
 import (
 	"errors"
+
 	"strings"
 	"workout_tracker/models"
 	"workout_tracker/repository"
 	"workout_tracker/utils"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var (
@@ -110,4 +113,89 @@ func InsertANewExerciseService(newExercise models.Exercise) (models.Exercise,err
 	}
 
 	return response, nil
+}
+
+func DeleteExerciseService(exerciseName string, role string) (error) {
+
+	if strings.ToUpper(role) == "ADMIN" {
+
+		var exerciseId int
+		exerciseId, err := repository.GetExerciseIdFromTrackerInDB(exerciseName)
+		if err != nil{
+			if err == pgx.ErrNoRows{
+				exerciseId = 0
+			}else {
+				return err
+			}
+		}
+	
+		err = repository.DeleteExerciseFromDb(exerciseName, exerciseId)
+		if err != nil {
+			return err
+		}
+	}else {
+		return ErrOnlyAdminAccess
+	}
+
+
+	
+	return nil
+}
+
+// func DeleteUserService(userId int) {
+
+
+
+// }
+
+func CreatePlanService2(userId int, ) {
+
+}
+
+func GetAllUserPlansService(userId int) (models.AllUserPlans, error) {
+
+	var allPlans models.AllUserPlans
+	plansExercises := make(map[string][]string)
+
+	rows, err := repository.GetAllUserPlansFromDB(userId)
+	if err != nil{
+		return allPlans, err
+	}
+
+	defer rows.Close()
+
+	var planName string
+
+	for rows.Next() {
+		err := rows.Scan(&planName)
+		if err != nil{
+			return allPlans, err
+		}
+
+		rows, err := repository.GetAllUserExercisesByPlanNameFromDB(userId, planName)
+		if err != nil {
+			return allPlans, err
+		}
+		defer rows.Close()
+
+		var exerciseName string
+		var allExerciseNames []string
+
+		for rows.Next() {
+			err := rows.Scan(&exerciseName)
+			if err != nil{
+				return allPlans, err
+			}
+
+			allExerciseNames = append(allExerciseNames, exerciseName)
+		}
+
+		
+		// allPlans.UserPlans[planName] = AllExerciseNames
+		plansExercises[planName] = allExerciseNames
+	}
+
+	allPlans.UserId = userId
+	allPlans.UserPlans = plansExercises
+	return allPlans, nil
 }

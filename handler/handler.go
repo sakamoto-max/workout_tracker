@@ -86,8 +86,9 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 
 			http.SetCookie(w, &myCookie)
 
+
 			response := map[string]string{
-				"message": "user login successful",
+				"message": "login successful",
 			}
 
 			w.Header().Set("Content-type", "application/json")
@@ -101,7 +102,6 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 func CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
-	fmt.Println(claimsFromRequest)
 
 	if !ok {
 		response := map[string]string{
@@ -143,4 +143,154 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+}
+
+func InsertANewExercise(w http.ResponseWriter, r *http.Request) {
+
+	var newExercise models.Exercise
+
+	json.NewDecoder(r.Body).Decode(&newExercise)
+
+	claims, ok :=utils.GetClaimsFromRequest(r.Context())
+	if !ok {
+		response := map[string]string{
+			"message" : "error in getting claims from Request",
+		}
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+	}
+
+	newExercise.UserRole = claims.Role
+
+	response, err := service.InsertANewExerciseService(newExercise)
+	if err != nil{
+		if err == service.ErrOnlyAdminAccess{
+			response := map[string]string{
+				"message" : service.ErrOnlyAdminAccess.Error(),
+			}
+			
+			w.Header().Set("Content-type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+		}else {
+			fmt.Printf("error occured : %v\n", err)
+			response := map[string]string{
+				"message" : "error occured",
+			}
+			w.Header().Set("Content-type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+		}
+	}else {
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func DeleteExercise(w http.ResponseWriter, r *http.Request) {
+
+	claims, ok := utils.GetClaimsFromRequest(r.Context())
+	if !ok {
+		response := map[string]string{
+			"message" : "cannot get claims",
+		}
+	
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)	
+	}
+
+	var exerciseName models.Exercise
+
+	json.NewDecoder(r.Body).Decode(&exerciseName)
+
+	exerciseName.UserRole = claims.Role
+
+	err := service.DeleteExerciseService(exerciseName.ExerciseName, exerciseName.UserRole)
+	if err != nil{
+		if err == service.ErrOnlyAdminAccess{
+
+			response := map[string]string{
+				"message" : service.ErrOnlyAdminAccess.Error(),
+			}
+			w.Header().Set("Content-type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+		}else {
+			fmt.Printf("error occured : %v", err)
+			response := map[string]string{
+				"message" : "error occured",
+			}
+	
+			w.Header().Set("Content-type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(response)
+		}
+	}else {
+
+		response := map[string]string{
+			"message" : "deleted successfully",
+		}
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// func DeleteUser(w http.ResponseWriter, r *http.Request) {
+	
+// 	userIdString := r.PathValue("id")
+
+// 	userId, err := strconv.Atoi(userIdString)
+
+// 	if err != nil{
+// 		response := map[string]string{
+// 			"message" : "error converting string to int",
+// 		}
+
+// 		w.Header().Set("Content-type", "application/json")
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(response)
+// 		fmt.Println(userId)
+// 		return
+// 	}
+// }
+
+func GetAllUserPlans(w http.ResponseWriter, r *http.Request) {
+
+	claimsFormRequest, ok := utils.GetClaimsFromRequest(r.Context())
+
+	if !ok {
+		response := map[string]string{
+			"message" : "couldn't fetch claims from the request",
+		}
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	
+	allPlans, err := service.GetAllUserPlansService(claimsFormRequest.UserId)
+	
+	if err != nil {
+		fmt.Printf("error occured : %v", err)
+		response := map[string]string{
+			"message" : "error occured",
+		}
+	
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+	
+	w.Header().Set("Content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(allPlans)
+	return
 }

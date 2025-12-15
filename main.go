@@ -1,87 +1,59 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"workout_tracker/database"
 	"workout_tracker/handler"
 	"workout_tracker/middleware"
-	"workout_tracker/models"
-	"workout_tracker/service"
-	"workout_tracker/utils"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+
 )
 
 func main() {
 
 	database.InitDB()
+
 	r := chi.NewRouter()	
 
 	r.Use(chiMiddleware.Logger)
 
 	r.Get("/workout/exercises", handler.GetAllExercises)
-	r.Post("/workout/user/signup", handler.UserSignup)
-	r.Post("/workout/user/login", handler.UserLogin)
-	r.With(middleware.JwtMiddleware).Post("/workout/user/plan/create", handler.CreatePlan)
-	// handler to add a new exercise
-	r.With(middleware.JwtMiddleware).Post("/workout/user/exercise", InsertANewExercise)
+	r.Post("/workout/signup", handler.UserSignup)
+	r.Post("/workout/login", handler.UserLogin)
+	r.With(middleware.JwtMiddleware).Post("/workout/plan/create", handler.CreatePlan)
+	r.With(middleware.JwtMiddleware).Post("/workout/exercise", handler.InsertANewExercise)
+	r.With(middleware.JwtMiddleware).Delete("/workout/exercise", handler.DeleteExercise)
+	r.With(middleware.JwtMiddleware).Get("/workout/plan", handler.GetAllUserPlans)
+	// User_id_plan_name_exercise_name
+	
 
 	fmt.Println("server is starting at 5000.....")
 
 	http.ListenAndServe(":5000", r)
+
+
+	// list all the exercises	// done       -> workout/exercises
+	// user signUp	// done                   -> workout/user/signup
+	// user login // done                     -> workout/user/login
+	// user create a workoutplan // done      -> workout/user/plan/create
+	// admin insert a new exercise // done    -> workout/user/exercise
+	// admin delete an exercise               -> workout/user/exercise
+
+
+	//todo :
+	// user update a workout plan             -> workout/user/plan/{planname}
+	// admin delete an user                   -> workout/user
+
+
+ 
+	// user delete all plans             -> workout/user/plan/delete
+	// user delete one plan             -> workout/user/plan/{planname}
+	// user get his workoutplan               -> workout/user/plan/{planname}
+	// user add sets and reps				  -> workout/user/plan/{planname}
+	// user get reports of his workouts       -> workout/user/progress
 }
 
-// {
-// 	"exercise_Nmae" : x,
-// 	"type" : y,
-// 	"body_part" : z
-// }
-// type 
 
-func InsertANewExercise(w http.ResponseWriter, r *http.Request) {
-
-	var newExercise models.Exercise
-
-	json.NewDecoder(r.Body).Decode(&newExercise)
-
-	claims, ok :=utils.GetClaimsFromRequest(r.Context())
-	if !ok {
-		response := map[string]string{
-			"message" : "error in getting claims from Request",
-		}
-
-		w.Header().Set("Content-type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-	}
-
-	newExercise.UserRole = claims.Role
-
-	response, err := service.InsertANewExerciseService(newExercise)
-	if err != nil{
-		if err == service.ErrOnlyAdminAccess{
-			response := map[string]string{
-				"message" : service.ErrOnlyAdminAccess.Error(),
-			}
-			
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}else {
-			fmt.Printf("error occured : %v\n", err)
-			response := map[string]string{
-				"message" : "error occured",
-			}
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}
-	}else {
-		w.Header().Set("Content-type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(response)
-	}
-}

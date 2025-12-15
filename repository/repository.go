@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"workout_tracker/database"
 	"workout_tracker/models"
 
@@ -142,8 +141,6 @@ func EeAaO(userId int, planName string, exerciseNames []string) error {
 		return err
 	}
 
-	fmt.Printf("planID is : %V", planId)
-
 	for _, v := range exerciseNames {
 
 		var exerciseTracerId int
@@ -160,8 +157,6 @@ func EeAaO(userId int, planName string, exerciseNames []string) error {
 
 		exerciseTrackerIds = append(exerciseTrackerIds, exerciseTracerId)
 	}
-
-	fmt.Printf("exer ids : %v", exerciseTrackerIds)
 
 	for _, v := range exerciseTrackerIds {
 		_, err := trnx.Exec(context.Background(), `
@@ -224,4 +219,129 @@ func InsertANewExerciseInDB(exerciseName string, exercisetype string, bodyPart s
 
 	return exercise, nil
 
+}
+
+func DeleteExerciseFromDb(exerciseName string, exerciseId int) error {
+
+	if exerciseId == 0 {
+		_, err := database.DBConn.Exec(context.Background(), `
+			DELETE FROM EXERCISES
+			WHERE EXERCISE_NAME = $1		
+		`,exerciseName)
+		
+		if err != nil {
+			return err
+		}
+	}else {
+
+		trnx, err := database.DBConn.Begin(context.Background())
+		if err != nil{
+			return err
+		}
+	
+		_, err = trnx.Exec(context.Background(), `
+			DELETE FROM EXERCISES 
+			WHERE EXERCISE_NAME = $1
+		`, exerciseName)
+	
+		if err != nil {
+			return err
+		}
+	
+		_,err = trnx.Exec(context.Background(), `
+			DELETE FROM WORKOUT_TRACKER
+			WHERE EXERCISE_NAME = $1		
+		`, exerciseName)
+		if err != nil {
+			return err
+		}
+
+		_, err = trnx.Exec(context.Background(), `
+			DELETE FROM PLAN 
+			WHERE EXERCISE_TRACKER_ID = $1		
+		`, exerciseId)
+
+		if err != nil{
+			return err
+		}
+
+		err = trnx.Commit(context.Background())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func GetExerciseIdFromTrackerInDB(exerciseName string) (int, error){
+
+	var exerciseId int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT ID FROM EXERCISE_TRACKER
+		WHERE EXERCISE_NAME = $1
+	`, exerciseName).Scan(&exerciseId)
+
+	if err != nil{
+		if err == pgx.ErrNoRows{
+			return 0, pgx.ErrNoRows
+		}else {
+			return exerciseId, err
+		}
+	}
+
+	return exerciseId, nil
+}
+
+// func DeleteUserFromDb(userId int) error {
+// 	trnx, err := database.DBConn.Begin(context.Background())
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	trnx.Exec(context.Background(), `
+
+	
+// 	`)
+// 	return nil
+
+// 	// delete user from users
+// 	// delete user details from workout_tracker, plan, workoutplan
+// }
+
+
+
+
+
+func GetAllUserPlansFromDB(userId int) (pgx.Rows, error) {
+
+	rows, err := database.DBConn.Query(context.Background(), `
+		SELECT PLAN_NAME FROM WORKOUTPLANS
+		WHERE USER_ID = $1
+	`, userId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+
+}
+
+func GetAllUserExercisesByPlanNameFromDB(userId int, planName string) (pgx.Rows, error) {
+
+	rows, err := database.DBConn.Query(context.Background(), `
+		SELECT EXERCISE_NAME FROM WORKOUTPLANS
+		INNER JOIN PLAN
+		ON WORKOUTPLANS.ID = PLAN.PLAN_ID
+		INNER JOIN EXERCISE_TRACKER
+		ON PLAN.EXERCISE_TRACKER_ID = EXERCISE_TRACKER.ID
+		WHERE USER_ID = $1 AND PLAN_NAME = $2;
+	`, userId, planName)
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
 }
