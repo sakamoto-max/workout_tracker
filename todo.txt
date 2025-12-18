@@ -1,4 +1,7 @@
-delete use
+
+edit the exercise handlers
+add CRUD to all routes
+
 
 
 This project involves creating a backend system for a workout tracker application where users can sign up, log in, create workout plans, and 
@@ -62,3 +65,6 @@ Documentation: Learn about OpenAPI Specs. Document your API endpoints and provid
 This project is a great way to practice building a backend system for a real-world application. 
 You will learn how to design a database schema, implement user authentication, and create RESTful API endpoints. 
 Additionally, you will gain experience in writing unit tests and documenting your code.
+
+marpulu cherpulu
+: handlers : 

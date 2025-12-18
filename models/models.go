@@ -30,7 +30,7 @@ type User struct {
 
 type UserSentExercises struct {
 	PlanName       string   `json:"plan_name"`
-	PlanId         string   `json:"plan_id"`
+	PlanId         int   `json:"plan_id"`
 	UserId         int      `json:"user_id"`
 	ExercisesNames []string `json:"exercise_names"`
 }
@@ -44,4 +44,42 @@ type UserClaims struct {
 type AllUserPlans struct {
 	UserId int `json:"user_id"`
 	UserPlans map[string][]string `json:"plan_names"`
+}
+
+type SetsWeight struct {
+	ExerciseName string `json:"exercise_name"`
+	SetsAndWeigts [3][2]int `json:"sets_weights"`
+}
+
+type Session struct {
+	SessionId int `json:"session_id"`
+	PlanName string `json:"plan_name"`
+	StartTime time.Time `json:"started_at"`
+	EndTime time.Time `json:"ended_at"`
+	Open bool `json:"open"`
+}
+
+type AddRepsWeights struct {
+	SetsAndRepsId int `json:"id"`
+	UserId int `json:"user_id"`
+	PlanName string `json:"plan_name"`
+	SessionId int `json:"session_id"`
+	ExerciseName string `json:"exercise_name"`
+	RepCount int `json:"rep_count"`
+	Weight int `json:"weight"`
+	Comments string `json:"comments"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type EndSession struct {
+	SessionId int `json:"session_id"`
+	PlanName string `json:"plan_name"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt time.Time `json:"ended_at"`
+}
+
+type RepsAndWeight struct {
+	Set int `json:"set"`
+	Reps int `json:"rep_count"`
+	Weight int `json:"weight"`
 }

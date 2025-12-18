@@ -1,9 +1,8 @@
 package service
 
 import (
-	"errors"
-
 	"strings"
+	"workout_tracker/customerrors"
 	"workout_tracker/models"
 	"workout_tracker/repository"
 	"workout_tracker/utils"
@@ -11,42 +10,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var (
-	ErrOnlyAdminAccess = errors.New("only admin can modify this")
-)
+// user services
+func GetAllUsersService(role string) ([]models.User ,error) {
 
-func GetAllExercisesService() (models.AllExercises, error) {
-	var allExercises models.AllExercises
-	rowsFromDb, err := repository.GetAllExercisesFromDB()
-	
-	if err != nil{
-		return allExercises, err
+	var users []models.User
+
+	if role == "user" {
+		return users, customerrors.ErrOnlyAdminAccess
 	}
-	
-	defer rowsFromDb.Close()
 
-	var id int
-	var exerciseName string
-	var exerciseType string
-	var bodyPart string
+	rows, err := repository.GetAllUsersFromDB()
+	if err != nil {
+		return users, err
+	}
 
-	for rowsFromDb.Next() {
-		
-		rowsFromDb.Scan(&id, &exerciseName, &exerciseType, &bodyPart)
-		
-		exercise := models.Exercise{
-			Id: id,
-			ExerciseName: exerciseName,
-			Type: exerciseType,
-			BodyPart: bodyPart,
+	defer rows.Close()
+    // ID, NAME, EMAIL, ROLE, CREATED_AT, UPDATED_AT
+	for rows.Next() {
+		var userDetails models.User
+		err := rows.Scan(&userDetails.Id, &userDetails.Name, &userDetails.Email, &userDetails.Role ,&userDetails.CreatedAt, &userDetails.UpdatedAt)
+		if err != nil{
+			return users, err
 		}
 
-		allExercises.Exercises = append(allExercises.Exercises, exercise)
+		userDetails.Password = "confidential"
+
+		users = append(users, userDetails)
 	}
 
-	return allExercises, nil
-}
+	return users, nil
 
+	
+}
 
 func UserSignupService(user models.User) (models.User, error ){
 	var userDetailsFromDb models.User
@@ -60,6 +55,8 @@ func UserSignupService(user models.User) (models.User, error ){
 
 	if user.Role == "" {
 		user.Role = "user"
+	}else {
+		user.Role = strings.ToLower(user.Role)
 	}
 
 	err = repository.CreateUserInDB(user)
@@ -77,7 +74,6 @@ func UserSignupService(user models.User) (models.User, error ){
 
 func UserLoginService(userSentDetails models.User) (error) {
 
-	// compare the passwords
 	err := utils.PasswordMatcher(userSentDetails.Email, userSentDetails.Password)
 	
 	if err != nil{
@@ -87,69 +83,96 @@ func UserLoginService(userSentDetails models.User) (error) {
 	}	
 }
 
+func UserUpdateDetailsService(updationDetails models.User) (models.User, error) {
+
+	var newDetails models.User
+	// get user old details
+	// match/
+	// fill missing values
+	// update
+	
+	
+	originalDetails, err := repository.GetUserFromDBbyId(updationDetails.Id)
+	if err != nil {
+		return newDetails, err
+	}	
+
+	if updationDetails.Password != "" {
+
+		updationDetails.Password, err = utils.HashThePassword(updationDetails.Password)
+		if err != nil {
+			return newDetails, err
+		}
+
+		originalDetails.Password = updationDetails.Password
+	}
+
+
+	if updationDetails.Name != "" {
+		originalDetails.Name = updationDetails.Name
+
+	}
+
+	if updationDetails.Email != "" {
+		originalDetails.Email = updationDetails.Email
+	}
+
+	newDetails, err = repository.UpdateUserDetailsInDB(originalDetails)
+	if err != nil{
+		return newDetails, err
+	}
+
+	newDetails.Password = "confidential"
+
+	return newDetails, nil
+}
+
+func DeleteUserByUserService(userId int) (error) {
+
+	sessionIds, err := repository.GetAllSessionIdsOfUser(userId)
+	if err != nil{
+		return err
+	}
+
+
+	planIds, err := repository.GetAllUserPlanIds(userId) 
+	if err != nil {
+		return err
+	}
+
+	exerciseIds, err := repository.GetAllUserExercisesIds(userId)
+	if err != nil {
+		return err
+	}
+
+	setRepIds, err := repository.GetAllIdsFromSetReps(userId) 
+	if err != nil {
+		return err
+	}
+
+	err = repository.DeleteUserByUserInDB(userId, setRepIds, sessionIds, exerciseIds, planIds)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+
+// plan services
+
 func CreatePlanService(userSentExercises models.UserSentExercises) error {
 
-	err := repository.EeAaO(userSentExercises.UserId, userSentExercises.PlanName, userSentExercises.ExercisesNames)
+	planId, err := repository.CreateAPlanInDB(userSentExercises.UserId, userSentExercises.PlanName)
+	if err != nil{
+		return err
+	}
+
+	err = repository.InsertExercisesIntoPlan(planId, userSentExercises.ExercisesNames)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func InsertANewExerciseService(newExercise models.Exercise) (models.Exercise,error) {
-
-	var response models.Exercise
-	if strings.ToUpper(newExercise.UserRole) == "ADMIN" {
-		responseFromdb, err := repository.InsertANewExerciseInDB(newExercise.ExerciseName, newExercise.Type, newExercise.BodyPart)
-		if err != nil{
-			return responseFromdb, err
-		}
-
-		response = responseFromdb
-		response.UserRole = "Admin"
-	}else {
-		return response, ErrOnlyAdminAccess
-	}
-
-	return response, nil
-}
-
-func DeleteExerciseService(exerciseName string, role string) (error) {
-
-	if strings.ToUpper(role) == "ADMIN" {
-
-		var exerciseId int
-		exerciseId, err := repository.GetExerciseIdFromTrackerInDB(exerciseName)
-		if err != nil{
-			if err == pgx.ErrNoRows{
-				exerciseId = 0
-			}else {
-				return err
-			}
-		}
-	
-		err = repository.DeleteExerciseFromDb(exerciseName, exerciseId)
-		if err != nil {
-			return err
-		}
-	}else {
-		return ErrOnlyAdminAccess
-	}
-
-
-	
-	return nil
-}
-
-// func DeleteUserService(userId int) {
-
-
-
-// }
-
-func CreatePlanService2(userId int, ) {
-
 }
 
 func GetAllUserPlansService(userId int) (models.AllUserPlans, error) {
@@ -199,3 +222,274 @@ func GetAllUserPlansService(userId int) (models.AllUserPlans, error) {
 	allPlans.UserPlans = plansExercises
 	return allPlans, nil
 }
+
+func GetUserPlanService(userId int, planName string) (models.UserSentExercises ,error) {
+	var planNameExercises models.UserSentExercises
+	var exerciseNames []string
+
+	planId, err := repository.GetPlanIdFromDB(userId, planName)
+	if err != nil {
+		return planNameExercises, err
+	}
+
+
+
+	rows, err := repository.GetAllUserExercisesByPlanNameFromDB(userId, planName)
+	if err != nil {
+		return planNameExercises, err
+	}
+
+	var exerciseName string
+
+	for rows.Next() {
+		err := rows.Scan(&exerciseName)
+		if err != nil {
+			return planNameExercises, err
+		}
+
+		exerciseNames = append(exerciseNames, exerciseName)
+	}
+
+	planNameExercises.PlanId = planId
+	planNameExercises.PlanName = planName
+	planNameExercises.ExercisesNames = exerciseNames
+	planNameExercises.UserId = userId
+
+	return planNameExercises, nil
+}
+
+
+// session services
+
+func CreateNewSessionService(userId int, planName string) (models.Session, error) {
+
+	var session models.Session
+	planId ,err := repository.GetPlanIdFromDB(userId, planName)
+	if err != nil {
+		return session, err
+	}
+
+	err = repository.CheckIfSessionIsOpen(userId, planName)
+
+	if err != nil {
+		return session, err
+	}
+
+	session, err = repository.CreateANewSessionInDB(planId, planName)
+	if err != nil {
+		return session, err
+	}
+
+	return session, nil
+
+
+
+
+	// if err != nil {
+	// 	if err == pgx.ErrNoRows{
+
+	// 	}else {
+	// 		return session, err
+	// 	}
+	// }
+
+	// if open {
+	// 	return session, customerrors.ErrDuplicateSession
+	// }
+
+	// session, err = repository.CreateANewSessionInDB(planId, planName)
+	// if err != nil {
+	// 	return session, err
+	// }
+
+	// return session, nil
+
+}
+
+func AddSetAndRepsService(addRepsAndWeights models.AddRepsWeights) (models.AddRepsWeights, error) {
+
+	var response models.AddRepsWeights
+	sessionId, open, err := repository.GetSessionIdFromDB(addRepsAndWeights.UserId, addRepsAndWeights.PlanName)
+	if err != nil {
+		if err == pgx.ErrNoRows{
+			return response, customerrors.ErrSessionIsClosed
+		}
+		return response, err
+	}
+
+	if open {
+		addRepsAndWeights.SessionId = sessionId
+	
+		response, err = repository.AddSetAndRepsInDB(addRepsAndWeights)
+		if err != nil {
+			return response, err
+		}
+		response.PlanName = addRepsAndWeights.PlanName
+		response.UserId = addRepsAndWeights.UserId
+	}else {
+		return response, customerrors.ErrSessionIsClosed
+	}
+
+	return response, nil
+
+}
+
+func EndASessionService(userId int, planName string) (models.EndSession, error) {
+	// get planId
+
+	var response models.EndSession
+	planId, err := repository.GetPlanIdFromDB(userId, planName)
+	if err != nil {
+		return response, err
+	}
+
+	response, err = repository.EndASessionInDB(planId, planName)
+	if err != nil{
+		return response, err
+	}
+
+	return response, nil
+}
+
+func GetAllUserSessionsByPlanNameService(userId int, planName string) ([]models.Session, error) {
+
+	var allSessions []models.Session
+
+	rows, err := repository.GetAllUserSessionsByPlanNameFromDb(userId, planName)
+	if err != nil{
+		return allSessions, err
+
+	}
+
+	var a models.Session
+
+	for rows.Next() {
+		err := rows.Scan(&a.SessionId, &a.PlanName, &a.StartTime ,&a.EndTime, &a.Open)
+		if err != nil{
+			return allSessions, err
+		}
+
+		allSessions = append(allSessions, a)
+	}
+
+	return allSessions, nil
+	
+}
+
+func GetAllUserSessionsService(userId int) ([]models.Session, error) {
+	
+	var allSessions []models.Session
+	
+	rows, err := repository.GetAllUserSessions(userId)
+	if err != nil{
+		return allSessions, err
+	
+	}
+	
+	var a models.Session
+	
+	for rows.Next() {
+		err := rows.Scan(&a.SessionId, &a.PlanName, &a.StartTime ,&a.EndTime, &a.Open)
+		if err != nil{
+			return allSessions, err
+		}
+	
+		allSessions = append(allSessions, a)
+	}
+	
+	return allSessions, nil
+}
+
+
+
+// exercise services
+func GetAllExercisesService() (models.AllExercises, error) {
+	var allExercises models.AllExercises
+	rowsFromDb, err := repository.GetAllExercisesFromDB()
+	
+	if err != nil{
+		return allExercises, err
+	}
+	
+	defer rowsFromDb.Close()
+
+	var id int
+	var exerciseName string
+	var exerciseType string
+	var bodyPart string
+
+	for rowsFromDb.Next() {
+		
+		rowsFromDb.Scan(&id, &exerciseName, &exerciseType, &bodyPart)
+		
+		exercise := models.Exercise{
+			Id: id,
+			ExerciseName: exerciseName,
+			Type: exerciseType,
+			BodyPart: bodyPart,
+		}
+
+		allExercises.Exercises = append(allExercises.Exercises, exercise)
+	}
+
+	return allExercises, nil
+}
+
+func InsertANewExerciseService(newExercise models.Exercise) (models.Exercise,error) {
+
+	var response models.Exercise
+	if strings.ToUpper(newExercise.UserRole) == "ADMIN" {
+		responseFromdb, err := repository.InsertANewExerciseInDB(newExercise.ExerciseName, newExercise.Type, newExercise.BodyPart)
+		if err != nil{
+			return responseFromdb, err
+		}
+
+		response = responseFromdb
+		response.UserRole = "Admin"
+	}else {
+		return response, customerrors.ErrOnlyAdminAccess
+	}
+
+	return response, nil
+}
+
+func DeleteExerciseService(exerciseName string, role string) (error) {
+
+	if strings.ToUpper(role) == "ADMIN" {
+
+		var exerciseId int
+		exerciseId, err := repository.GetExerciseIdFromTrackerInDB(exerciseName)
+		if err != nil{
+			if err == pgx.ErrNoRows{
+				exerciseId = 0
+			}else {
+				return err
+			}
+		}
+	
+		err = repository.DeleteExerciseFromDb(exerciseName, exerciseId)
+		if err != nil {
+			return err
+		}
+	}else {
+		return customerrors.ErrOnlyAdminAccess
+	}
+
+
+	
+	return nil
+}
+
+
+// stats services
+
+func GetStatsByExerciseNameService(userId int, exerciseName string) {
+	
+
+}
+
+
+
+
+
+
