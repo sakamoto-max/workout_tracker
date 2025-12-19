@@ -10,6 +10,7 @@ import (
 	"workout_tracker/models"
 	"workout_tracker/service"
 	"workout_tracker/utils"
+	"workout_tracker/validations"
 )
 
 // user handlers
@@ -36,6 +37,8 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 			"message" : err.Error(),
 		}
 
+
+		
 		w.Header().Set("Content-type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
@@ -52,23 +55,34 @@ func UserSignup(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&user)
 
+	validationErr, err := validations.UserSignUpValidator(user)
+	if err != nil {
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErr)
+		return
+	}
+
 	response, err := service.UserSignupService(user)
 	if err != nil {
 		fmt.Printf("error occured : %v", err)
 		response := map[string]string{
 			"message": "error occured",
 		}
-
+	
 		w.Header().Set("Content-type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return 
 	} 
-
+	
 	w.Header().Set("Content-type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
+
+
 
 func UserLogin(w http.ResponseWriter, r *http.Request) {
 
@@ -76,26 +90,41 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&userSentDetails)
 
-	err := service.UserLoginService(userSentDetails)
+	validationErr, err := validations.UserLoginValidator(userSentDetails)
+	if err != nil {
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErr)
+		return
+	}
+		
+	err = service.UserLoginService(userSentDetails)
 	if err != nil {
 		fmt.Printf("error occured : %v\n", err)
-
+		
 		response := map[string]string{
 			"message": "error occured",
 		}
-
+		
 		w.Header().Set("Content-type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(response)
 		return
 	} 
-
+		
 	jwtToken, err := auth.GenerateJwtToken(userSentDetails.Email)
 	if err != nil {
 		fmt.Printf("error occured : %v\n", err)
+		response := map[string]string{
+			"message": "error occured",
+		}
+		
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
 		return
 	}
-
+		
 	myCookie := http.Cookie{
 		Name:     "jwtToken",
 		Value:    jwtToken,
@@ -103,25 +132,21 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Expires:  time.Now().Add(time.Minute * 10),
 	}
-
+		
 	http.SetCookie(w, &myCookie)
-
+		
 	response := map[string]string{
 		"message": "login successful",
 	}
-
+		
 	w.Header().Set("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
 
+
 func UserUpdateDetails(w http.ResponseWriter, r *http.Request) {
 
-	
-	// can change name
-	// can change email
-	// can change password
-	
 	var userUpdateDetails models.User
 	
 	claims, ok := utils.GetClaimsFromRequest(r.Context())
@@ -217,6 +242,14 @@ func InsertANewExercise(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&newExercise)
 
+	validationErr, err := validations.InsertNewExerciseValidator(newExercise)
+	if err != nil {
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErr)
+		return
+	}
+
 	claims, ok :=utils.GetClaimsFromRequest(r.Context())
 	if !ok {
 		response := map[string]string{
@@ -259,6 +292,7 @@ func InsertANewExercise(w http.ResponseWriter, r *http.Request) {
 	
 }
 
+// needs validation
 func DeleteExercise(w http.ResponseWriter, r *http.Request) {
 
 	claims, ok := utils.GetClaimsFromRequest(r.Context())
@@ -308,6 +342,7 @@ func DeleteExercise(w http.ResponseWriter, r *http.Request) {
 
 // plan handlers
 
+// needs validation
 func CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
@@ -327,9 +362,17 @@ func CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	json.NewDecoder(r.Body).Decode(&exercises)
 
+	validationErr, err := validations.CreatePlanValidator(exercises)
+	if err != nil {
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErr)
+		return
+	}
+
 	exercises.UserId = claimsFromRequest.UserId
 
-	err := service.CreatePlanService(exercises)
+	err = service.CreatePlanService(exercises)
 
 	if err != nil {
 		fmt.Printf("error occured : %v\n", err)
@@ -423,6 +466,43 @@ func GetUserPlan(w http.ResponseWriter, r *http.Request) {
 
 // session plans
 
+func GetAllExercisesBySession(w http.ResponseWriter, r *http.Request) {
+
+	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
+	
+	if !ok {
+		response := map[string]string{
+			"message" : "failed to get claims from request",
+		}
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	planName := r.PathValue("planname")
+
+	response, err := service.GetAllExercisesBySessionService(claimsFromRequest.UserId, planName)
+	if err != nil {
+		fmt.Printf("error occured : %v\n", err)
+		response := map[string]string {
+			"message" : err.Error(),
+		}
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+
+	}
+
+	w.Header().Set("Content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)	
+}
+
+
 func CreateNewSession(w http.ResponseWriter, r *http.Request) {
 
 	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
@@ -495,6 +575,8 @@ func EndASession(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// needs validation
+
 func AddSetAndReps(w http.ResponseWriter, r *http.Request) {
 
 	var addRepsAndWeights models.AddRepsWeights
@@ -513,6 +595,14 @@ func AddSetAndReps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewDecoder(r.Body).Decode(&addRepsAndWeights)
+
+	validationErr, err := validations.AddRepsWeightsValidator(addRepsAndWeights)
+	if err != nil {
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(validationErr)
+		return
+	}
 
 	planName := r.PathValue("planname")
 

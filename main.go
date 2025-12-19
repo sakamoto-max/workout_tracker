@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"workout_tracker/config"
 	"workout_tracker/database"
 	"workout_tracker/handler"
 	"workout_tracker/middleware"
@@ -14,8 +15,8 @@ import (
 
 func main() {
 
+	config.InitializeConfig()
 	database.InitDB()
-
 	r := chi.NewRouter()	
 
 	r.Use(chiMiddleware.Logger)
@@ -45,8 +46,10 @@ func main() {
 
 	r.With(middleware.JwtMiddleware).Get("/workout/plan/{planname}/session", handler.GetAllUserSessionsByPlanName)
 	r.With(middleware.JwtMiddleware).Get("/workout/plan/session", handler.GetAllUserSessions)
+	// r.With(middleware.JwtMiddleware).Get("/workout/plan/{planname}/session/{exercisename}", handler.GetStatsByExerciseName)
+	r.With(middleware.JwtMiddleware).Get("/workout/plan/{planname}/session/stats", handler.GetAllExercisesBySession)
 
-	r.Get("/workout/plan/{exercisename}/getstats", handler.GetStatsByExerciseName)
+	// r.Get("/workout/plan/{exercisename}/getstats", handler.GetStatsByExerciseName)
 
 	// get stats by exercise name
 	// exercise_name -> date reps weight
@@ -56,7 +59,7 @@ func main() {
 
 	fmt.Println("server is starting at 5000.....")
 
-	http.ListenAndServe(":5000", r)
+	http.ListenAndServe(":"+config.Config.WebPort, r)
 
 
 	// list all the exercises	// done       -> workout/exercises
@@ -67,7 +70,6 @@ func main() {
 	// admin delete an exercise               -> workout/exercise
 
 
-	//todo :
 	// user update a workout plan             -> workout/plan/{planname}
 	// admin delete an user                   -> workout/user
 

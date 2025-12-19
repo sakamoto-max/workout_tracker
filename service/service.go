@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"workout_tracker/customerrors"
 	"workout_tracker/models"
@@ -317,8 +318,25 @@ func AddSetAndRepsService(addRepsAndWeights models.AddRepsWeights) (models.AddRe
 		return response, err
 	}
 
+	addRepsAndWeights.SessionId = sessionId
+
 	if open {
+
+		// var lastSetNumber int
+		lastSetNumber, err := repository.GetLastSetNumber(addRepsAndWeights.UserId, addRepsAndWeights.ExerciseName, addRepsAndWeights.SessionId)
+		fmt.Printf("last set number : %v\n", lastSetNumber)
+		
+		if err != nil {
+			if err == pgx.ErrNoRows{
+				lastSetNumber = 0
+			}else {
+				return response, err
+			}
+		}
 		addRepsAndWeights.SessionId = sessionId
+		newSetNumber := lastSetNumber + 1
+		fmt.Printf("new set number : %v\n", newSetNumber)
+		addRepsAndWeights.SetNumber = newSetNumber
 	
 		response, err = repository.AddSetAndRepsInDB(addRepsAndWeights)
 		if err != nil {
@@ -484,8 +502,92 @@ func DeleteExerciseService(exerciseName string, role string) (error) {
 // stats services
 
 func GetStatsByExerciseNameService(userId int, exerciseName string) {
+
 	
 
+
+}
+
+
+
+// type ExerciseNameSet struct {
+// 	ExerciseName map[string]SetRepsWeights `json:"exercise_name"`
+// }
+
+// {
+// 	"leg_curls" : [
+// 		"set_1" : [
+// 			"reps" : 10,
+// 			"weight" : 20
+// 		]
+// 	]
+// }
+
+type New struct {
+
+}
+
+
+
+
+
+func GetAllExercisesBySessionService(userId int, planName string) ([]models.ExerciseNameSet, error) {
+	var AllExercises []models.ExerciseNameSet
+
+	noOfSetsPerExercise := make(map[string]int)
+
+
+	sessionId, _,  err := repository.GetSessionIdFromDBTwo(userId, planName)
+
+	if err != nil {
+		return AllExercises, err
+	}
+
+	exerciseNames, err := repository.GetAllExercisesBySession(userId, planName, sessionId)
+	if err != nil {
+		return AllExercises, err
+	}
+
+	for _, v := range(exerciseNames) {
+		noOfSets, err := repository.GetNoOfSetsForAExercise(userId, planName, sessionId, v)
+		if err != nil {
+			return AllExercises, err
+		}
+
+		noOfSetsPerExercise[v] = noOfSets
+	}
+
+	for exerciseName, noOfSets := range(noOfSetsPerExercise) {
+
+		exerciseNameSet := make(models.ExerciseNameSet)
+
+		var setsArray models.SetsArray
+
+		for j := range(noOfSets) {
+
+			repsWeightsMap := make(map[string]int)
+			set := make(models.SetsRepsWeight)
+
+			setName := fmt.Sprintf("set_%v", j+1)
+			reps, weight, err := repository.GetRepsAndWeightsForASet(userId, planName, sessionId, exerciseName, j+1)
+			if err != nil {
+				return AllExercises, err
+			}
+
+			repsWeightsMap["reps"] = reps
+			repsWeightsMap["weight"] = weight
+
+			set[setName] = repsWeightsMap
+
+			setsArray = append(setsArray, set)
+		}
+
+		exerciseNameSet[exerciseName] = setsArray
+
+		AllExercises = append(AllExercises, exerciseNameSet)
+	}
+
+	return AllExercises, nil
 }
 
 

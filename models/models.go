@@ -65,6 +65,7 @@ type AddRepsWeights struct {
 	PlanName string `json:"plan_name"`
 	SessionId int `json:"session_id"`
 	ExerciseName string `json:"exercise_name"`
+	SetNumber int `json:"set_number"`
 	RepCount int `json:"rep_count"`
 	Weight int `json:"weight"`
 	Comments string `json:"comments"`
@@ -79,7 +80,28 @@ type EndSession struct {
 }
 
 type RepsAndWeight struct {
-	Set int `json:"set"`
 	Reps int `json:"rep_count"`
 	Weight int `json:"weight"`
 }
+
+type SetRepsWeights struct {
+	Set map[int]RepsAndWeight `json:"set"`
+}
+
+
+type RepsWeightsMap map[string]int
+
+type SetsRepsWeight map[string]RepsWeightsMap
+
+type ExerciseSetsRepsWeights map[string]SetRepsWeights
+
+type SetsArray []SetsRepsWeight
+
+type ExerciseNameSet map[string]SetsArray
+
+
+
+// {
+// 	"exercise_name" : "x",
+// 	tracker := 
+// }

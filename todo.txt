@@ -1,6 +1,9 @@
-
+GetAllExercisesBySessionService
 edit the exercise handlers
 add CRUD to all routes
+
+validations and transformations
+
 
 
 

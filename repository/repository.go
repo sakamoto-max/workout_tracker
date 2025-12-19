@@ -259,11 +259,11 @@ func AddSetAndRepsInDB(reps models.AddRepsWeights) (models.AddRepsWeights, error
 	var r models.AddRepsWeights
 
 	err := database.DBConn.QueryRow(context.Background(), `
-		INSERT INTO SETREPS(EXERCISE_NAME, SESSION_ID, REPS, WEIGHT, COMMENTS, CREATED_AT)
-		VALUES($1, $2, $3, $4, $5, NOW())
-		RETURNING ID, EXERCISE_NAME, SESSION_ID, REPS, WEIGHT, COMMENTS, CREATED_AT
-	`, reps.ExerciseName, reps.SessionId, reps.RepCount, reps.Weight, reps.Comments).Scan(
-			&r.SetsAndRepsId, &r.ExerciseName, &r.SessionId, &r.RepCount, &r.Weight, &r.Comments, &r.CreatedAt)
+		INSERT INTO SETREPS(EXERCISE_NAME, SESSION_ID, REPS, WEIGHT, COMMENTS, CREATED_AT, SET_NUMBER)
+		VALUES($1, $2, $3, $4, $5, NOW(), $6)
+		RETURNING ID, EXERCISE_NAME, SESSION_ID, REPS, WEIGHT, COMMENTS, CREATED_AT, SET_NUMBER
+	`, reps.ExerciseName, reps.SessionId, reps.RepCount, reps.Weight, reps.Comments, reps.SetNumber).Scan(
+			&r.SetsAndRepsId, &r.ExerciseName, &r.SessionId, &r.RepCount, &r.Weight, &r.Comments, &r.CreatedAt, &r.SetNumber)
 
 	if err != nil {
 		return r, err
@@ -282,6 +282,25 @@ func GetSessionIdFromDB(userId int, planName string) (int, bool, error) {
 		INNER JOIN PLANS
 		ON PLANS.ID = SESSION.PLAN_ID
 		WHERE USER_ID = $1 AND SESSION.PLAN_NAME = $2 AND OPEN = TRUE
+	`, userId, planName).Scan(&sessionId, &open)
+
+	if err != nil {
+		return 0, false, err
+	}
+
+	return sessionId, open, nil
+}
+
+func GetSessionIdFromDBTwo(userId int, planName string) (int, bool, error) {
+
+	var sessionId int
+	var open bool
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT SESSION.ID, SESSION.OPEN FROM SESSION
+		INNER JOIN PLANS
+		ON PLANS.ID = SESSION.PLAN_ID
+		WHERE USER_ID = $1 AND SESSION.PLAN_NAME = $2
 	`, userId, planName).Scan(&sessionId, &open)
 
 	if err != nil {
@@ -318,7 +337,6 @@ func CheckIfSessionIsOpen(userId int, planName string) (error) {
 	// true -> dont create session
 	// false -> create session
 }
-
 
 func GetAllUserSessionsByPlanNameFromDb(userId int, planName string) (pgx.Rows, error) {
 
@@ -465,6 +483,110 @@ func DeleteFromSetRepsById(ids []int) (error) {
 
 	return nil
 }
+
+func GetLastSetNumber(userId int, exerciseName string, sessionId int) (int, error)  {
+	var setNumber int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT SET_NUMBER FROM SETREPS
+		INNER JOIN SESSION
+		ON SETREPS.SESSION_ID = SESSION.ID
+		INNER JOIN PLANS
+		ON SESSION.PLAN_ID = PLANS.ID
+		WHERE USER_ID = $1 AND EXERCISE_NAME = $2 AND SESSION_ID = $3 AND SESSION.OPEN IS TRUE
+		ORDER BY SET_NUMBER DESC
+		LIMIT 1
+	`,userId, exerciseName, sessionId).Scan(&setNumber)
+
+	if err != nil {
+		return setNumber, err
+	}
+
+	return setNumber, nil
+}
+
+// get all the exercises performed in a session
+
+func GetAllExercisesBySession(userId int, planName string, sessionId int) ([]string , error) {
+
+	var exerciseNames []string
+
+	rows, err := database.DBConn.Query(context.Background(), `
+		SELECT DISTINCT EXERCISE_NAME FROM SETREPS
+		INNER JOIN SESSION
+		ON SETREPS.SESSION_ID = SESSION.ID
+		INNER JOIN PLANS
+		ON SESSION.PLAN_ID = PLANS.ID
+		WHERE SESSION.PLAN_NAME = $1 AND USER_ID = $2 AND SESSION_ID = $3
+	`, planName, userId, sessionId)
+
+	if err != nil {
+		return exerciseNames, err
+	}
+
+	defer rows.Close()
+
+	var exerciseName string
+
+	for rows.Next() {
+		err := rows.Scan(&exerciseName)
+		if err != nil {
+			return exerciseNames, err
+		}
+
+		exerciseNames = append(exerciseNames, exerciseName)
+	}
+
+	return exerciseNames, nil
+}
+
+// get no of sets performed for each exercise
+
+func GetNoOfSetsForAExercise(userId int, planName string, sessionId int, exerciseName string) (int, error) {
+	var noOfSets int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT COUNT(SET_NUMBER) FROM SETREPS
+		INNER JOIN SESSION
+		ON SETREPS.SESSION_ID = SESSION.ID
+		INNER JOIN PLANS
+		ON SESSION.PLAN_ID = PLANS.ID
+		WHERE SESSION.PLAN_NAME = $1 AND USER_ID = $2 AND SESSION_ID = $3 AND EXERCISE_NAME = $4
+	`, planName, userId, sessionId, exerciseName).Scan(&noOfSets)
+
+	if err != nil {
+		return noOfSets, err
+	}
+
+	return noOfSets, nil
+}
+
+// userId, planName, sessionId , exerciseName, setNumber
+// get reps and weight for each set
+
+func GetRepsAndWeightsForASet(userId int , planName string, sessionId int, exerciseName string, setNumber int) (int, int, error) {
+
+	var reps int
+	var weight int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT REPS, WEIGHT FROM SETREPS
+		INNER JOIN SESSION
+		ON SETREPS.SESSION_ID = SESSION.ID
+		INNER JOIN PLANS	
+		ON SESSION.PLAN_ID = PLANS.ID
+		WHERE SESSION.PLAN_NAME = $1 AND USER_ID = $2 AND SESSION_ID = $3 AND EXERCISE_NAME = $4 AND SET_NUMBER = $5
+	`, planName, userId, sessionId, exerciseName, setNumber).Scan(&reps, &weight)
+
+	if err != nil {
+		return reps, weight, err
+	}
+
+	return  reps, weight, nil
+}
+
+
+
 
 
 
@@ -773,7 +895,28 @@ func GetExerciseIdFromTrackerInDB(exerciseName string) (int, error) {
 }
 
 
+// stat functions
 
+func GetExerciseByPlanName(userId int, planName string, sessionId int) {
+	
+}
 
+func GetAllExercisesBySessionFromDB(userId int, planName string, sessionId int) (pgx.Rows, error) {
+
+	rows, err := database.DBConn.Query(context.Background(), `
+		SELECT SETREPS.EXERCISE_NAME, SETREPS.SET_NUMBER, SETREPS.REPS, SETREPS.WEIGHT FROM SETREPS
+		INNER JOIN SESSION
+		ON SETREPS.SESSION_ID = SESSION.ID
+		INNER JOIN PLANS
+		ON SESSION.PLAN_ID = PLANS.ID
+		WHERE SESSION.PLAN_NAME = $1 AND USER_ID = $2 AND SESSION_ID = $3
+	`, planName, userId, sessionId)
+
+	if err != nil{
+		return rows, err
+	}
+
+	return rows, err
+}
 
 
