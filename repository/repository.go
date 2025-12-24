@@ -22,6 +22,22 @@ func CreateUserInDB(user models.User) error {
 	return nil
 }
 
+func EmailExistsInDB(email string) (error) {
+
+	var id int
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT ID FROM USERS
+		WHERE EMAIL = $1	
+	`, email).Scan(&id)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func GetUserFromDb(email string) (models.User, error) {
 	var userDetailsFromDb models.User
 
@@ -505,8 +521,6 @@ func GetLastSetNumber(userId int, exerciseName string, sessionId int) (int, erro
 	return setNumber, nil
 }
 
-// get all the exercises performed in a session
-
 func GetAllExercisesBySession(userId int, planName string, sessionId int) ([]string , error) {
 
 	var exerciseNames []string
@@ -540,8 +554,6 @@ func GetAllExercisesBySession(userId int, planName string, sessionId int) ([]str
 	return exerciseNames, nil
 }
 
-// get no of sets performed for each exercise
-
 func GetNoOfSetsForAExercise(userId int, planName string, sessionId int, exerciseName string) (int, error) {
 	var noOfSets int
 
@@ -560,9 +572,6 @@ func GetNoOfSetsForAExercise(userId int, planName string, sessionId int, exercis
 
 	return noOfSets, nil
 }
-
-// userId, planName, sessionId , exerciseName, setNumber
-// get reps and weight for each set
 
 func GetRepsAndWeightsForASet(userId int , planName string, sessionId int, exerciseName string, setNumber int) (int, int, error) {
 
@@ -585,12 +594,15 @@ func GetRepsAndWeightsForASet(userId int , planName string, sessionId int, exerc
 	return  reps, weight, nil
 }
 
-
-
-
-
-
 // plan functions
+
+// func DeleteExerciseInPlanInDb(userId int, planName string, exerciseName string) {
+// 	database.DBConn.Exec(context.Background(), `
+// 		SELECT 
+	
+// 	`)
+
+// }
 
 func CreateAPlanInDB(userId int, planName string) (int, error) {
 	var planId int
@@ -644,6 +656,9 @@ func GetPlanIdFromDB(userId int, planName string) (int, error) {
 	`, userId, planName).Scan(&planId)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return 0, customerrors.ErrPlanDoesNotExist
+		}
 		return 0, err
 	}
 
@@ -788,6 +803,117 @@ func DeleteFromPlansById(ids []int) error {
 	return nil
 }
 
+
+func ExerciseExistsInPlan(userId int, planName string, exerciseName string) (bool, error) {
+
+	var id int
+	var exists bool
+
+	err := database.DBConn.QueryRow(context.Background(), `
+		SELECT PLAN_EXERCISES.ID FROM PLAN_EXERCISES
+		INNER JOIN PLANS
+		ON PLAN_EXERCISES.PLAN_ID = PLANS.ID 
+		WHERE USER_ID = $1 AND PLAN_NAME = $2 AND EXERCISE_NAMES = $3
+	`, userId, planName, exerciseName).Scan(&id)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if id == 0 {
+		exists = false
+	}else {
+		exists = true
+	}
+
+	return exists, nil
+}
+
+
+func DeletePlanFromSetRepsInDB(userId int, planName string) (error) {
+	_, err := database.DBConn.Exec(context.Background(), `
+		DELETE FROM SETREPS 
+		WHERE SETREPS.ID IN (
+			SELECT SETREPS.* FROM SETREPS
+			INNER JOIN SESSION
+			ON SETREPS.SESSION_ID = SESSION.ID
+			INNER JOIN PLANS
+			ON SESSION.PLAN_ID = PLANS.ID
+			WHERE USER_ID = $1 AND SESSION.PLAN_NAME = $2
+		)
+	`, userId, planName)
+
+	if err != nil{
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+func DeleteSessionInDb(userId int, planName string) (error) {
+	_, err := database.DBConn.Exec(context.Background(), `
+		DELETE FROM SESSION 
+		WHERE ID IN(
+			SELECT SESSION.ID FROM SESSION
+			INNER JOIN PLANS
+			ON SESSION.PLAN_ID = PLANS.ID
+			WHERE USER_ID = $1 AND SESSION.PLAN_NAME = $2
+		)
+	`, userId, planName)
+
+	if err != nil {
+		if err == pgx.ErrNoRows{
+			return nil
+		}
+		return err
+	}
+
+	return nil
+
+}
+
+func DeleteExerciesFromPlanExercies(userId int, planName string) (error) {
+	// get all the exercises in the plan
+	// delete all of them 
+
+	_, err := database.DBConn.Exec(context.Background(), `
+	DELETE FROM PLAN_EXERCISES 
+	WHERE ID IN (
+		SELECT PLAN_EXERCISES.ID FROM PLAN_EXERCISES
+		INNER JOIN PLANS
+		ON PLANS.ID = PLAN_EXERCISES.PLAN_ID
+		WHERE USER_ID = $1 AND PLAN_NAME = $2
+	)
+	`, userId, planName)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+func DeletePlanInDb(userId int, planName string) (error) {
+	_, err := database.DBConn.Exec(context.Background(), `
+		SELECT * FROM PLANS
+		WHERE user_id = $1 AND plan_name = $2
+	`, userId, planName)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 // exercise functions
 
 func GetAllExercisesFromDB() (pgx.Rows, error) {
@@ -893,6 +1019,22 @@ func GetExerciseIdFromTrackerInDB(exerciseName string) (int, error) {
 
 	return exerciseId, nil
 }
+
+func AddExerciseToPlanInDB(planId int, exerciseName string) (error) {
+
+	_, err := database.DBConn.Exec(context.Background(), `
+		INSERT INTO PLAN_EXERCISES(plan_id, exercise_names)
+		VALUES($1, $2)	
+	`, planId, exerciseName)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
+
 
 
 // stat functions

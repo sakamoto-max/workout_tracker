@@ -6,6 +6,7 @@ import (
 	"workout_tracker/customerrors"
 	"workout_tracker/models"
 	"workout_tracker/repository"
+	"workout_tracker/transformations"
 	"workout_tracker/utils"
 
 	"github.com/jackc/pgx/v5"
@@ -75,7 +76,18 @@ func UserSignupService(user models.User) (models.User, error ){
 
 func UserLoginService(userSentDetails models.User) (error) {
 
-	err := utils.PasswordMatcher(userSentDetails.Email, userSentDetails.Password)
+	// check if the email exists
+	err := repository.EmailExistsInDB(userSentDetails.Email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return customerrors.ErrEmailDoesntExist
+		}
+
+		return err
+	}
+
+
+	err = utils.PasswordMatcher(userSentDetails.Email, userSentDetails.Password)
 	
 	if err != nil{
 		return err
@@ -158,11 +170,11 @@ func DeleteUserByUserService(userId int) (error) {
 	return nil
 }
 
-
 // plan services
 
 func CreatePlanService(userSentExercises models.UserSentExercises) error {
 
+	// check if the exercises exist in Exercises table
 	planId, err := repository.CreateAPlanInDB(userSentExercises.UserId, userSentExercises.PlanName)
 	if err != nil{
 		return err
@@ -175,6 +187,7 @@ func CreatePlanService(userSentExercises models.UserSentExercises) error {
 
 	return nil
 }
+
 
 func GetAllUserPlansService(userId int) (models.AllUserPlans, error) {
 
@@ -259,6 +272,41 @@ func GetUserPlanService(userId int, planName string) (models.UserSentExercises ,
 	return planNameExercises, nil
 }
 
+func AddExerciseToPlanService(userId int, planName string, exerciseName string) (error) {
+
+	// check if exercise already exists in plan
+	planName = transformations.SpaceToUnderScore(planName)
+	exerciseName = transformations.SpaceToUnderScore(exerciseName)
+
+	exists, err := repository.ExerciseExistsInPlan(userId, planName, exerciseName)
+
+	if err != nil {
+		return err
+	}
+
+	if exists{
+		return customerrors.ErrExerciseAlrExists
+	}
+
+	// get planId
+	planId, err := repository.GetPlanIdFromDB(userId, planName)
+	if err != nil {
+		return err
+	}
+	// add exercise
+	err = repository.AddExerciseToPlanInDB(planId, exerciseName)
+	if err != nil{
+		return err
+	}
+
+	return nil
+	// return nil
+}
+
+func DeleteExerciseInPlanService(userId int, planName string, exerciseName string) {
+
+}
+
 
 // session services
 
@@ -310,6 +358,18 @@ func CreateNewSessionService(userId int, planName string) (models.Session, error
 func AddSetAndRepsService(addRepsAndWeights models.AddRepsWeights) (models.AddRepsWeights, error) {
 
 	var response models.AddRepsWeights
+
+	exists, err := repository.ExerciseExistsInPlan(addRepsAndWeights.UserId, addRepsAndWeights.PlanName, addRepsAndWeights.ExerciseName)
+
+	if err != nil {
+		return response, err
+	}
+
+	if !exists {
+		return response, customerrors.ErrExerciseDoesNotExist
+	}
+
+
 	sessionId, open, err := repository.GetSessionIdFromDB(addRepsAndWeights.UserId, addRepsAndWeights.PlanName)
 	if err != nil {
 		if err == pgx.ErrNoRows{
@@ -321,8 +381,6 @@ func AddSetAndRepsService(addRepsAndWeights models.AddRepsWeights) (models.AddRe
 	addRepsAndWeights.SessionId = sessionId
 
 	if open {
-
-		// var lastSetNumber int
 		lastSetNumber, err := repository.GetLastSetNumber(addRepsAndWeights.UserId, addRepsAndWeights.ExerciseName, addRepsAndWeights.SessionId)
 		fmt.Printf("last set number : %v\n", lastSetNumber)
 		
@@ -333,9 +391,8 @@ func AddSetAndRepsService(addRepsAndWeights models.AddRepsWeights) (models.AddRe
 				return response, err
 			}
 		}
-		addRepsAndWeights.SessionId = sessionId
+		
 		newSetNumber := lastSetNumber + 1
-		fmt.Printf("new set number : %v\n", newSetNumber)
 		addRepsAndWeights.SetNumber = newSetNumber
 	
 		response, err = repository.AddSetAndRepsInDB(addRepsAndWeights)
@@ -418,8 +475,6 @@ func GetAllUserSessionsService(userId int) ([]models.Session, error) {
 	return allSessions, nil
 }
 
-
-
 // exercise services
 func GetAllExercisesService() (models.AllExercises, error) {
 	var allExercises models.AllExercises
@@ -492,43 +547,8 @@ func DeleteExerciseService(exerciseName string, role string) (error) {
 	}else {
 		return customerrors.ErrOnlyAdminAccess
 	}
-
-
-	
 	return nil
 }
-
-
-// stats services
-
-func GetStatsByExerciseNameService(userId int, exerciseName string) {
-
-	
-
-
-}
-
-
-
-// type ExerciseNameSet struct {
-// 	ExerciseName map[string]SetRepsWeights `json:"exercise_name"`
-// }
-
-// {
-// 	"leg_curls" : [
-// 		"set_1" : [
-// 			"reps" : 10,
-// 			"weight" : 20
-// 		]
-// 	]
-// }
-
-type New struct {
-
-}
-
-
-
 
 
 func GetAllExercisesBySessionService(userId int, planName string) ([]models.ExerciseNameSet, error) {
@@ -589,9 +609,3 @@ func GetAllExercisesBySessionService(userId int, planName string) ([]models.Exer
 
 	return AllExercises, nil
 }
-
-
-
-
-
-

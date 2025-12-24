@@ -14,6 +14,12 @@ type Exercise struct {
 	BodyPart     string `json:"body_part"`
 }
 
+type AddExerciseToPlanStruct struct {
+	UserId int `json:"user_id"`
+	ExerciseName string `json:"exercise_name"`
+	PlanName string `json:"plan_name"`
+}
+
 type AllExercises struct {
 	Exercises []Exercise `json:"exercises"`
 }

@@ -43,3 +43,5 @@ func GetClaimsFromRequest(c context.Context) (*models.UserClaims, bool) {
 	claims, ok := c.Value(middleware.ClaimsKey).(*models.UserClaims)
 	return claims, ok
 }
+
+

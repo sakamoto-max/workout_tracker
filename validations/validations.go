@@ -21,8 +21,9 @@ var(
 	ErrPlanNameReq = ErrorStruct{Path: "plan_name", Message: "required"}
 	ErrExerciseNamesReq = ErrorStruct{Path: "exercise_names", Message: "required"}
 	ErrRepCountReq = ErrorStruct{Path: "rep_count", Message: "required"}
-	ErrWeightOptional = ErrorStruct{Path: "rep_count", Message: "optional"}
-	ErrCommentsOptional = ErrorStruct{Path: "rep_count", Message: "optional"}
+	ErrWeightOptional = ErrorStruct{Path: "weights", Message: "optional"}
+	ErrCommentsOptional = ErrorStruct{Path: "comments", Message: "optional"}
+
 	
 	ErrSomeError = errors.New("chumma error")
 )
@@ -103,17 +104,10 @@ func InsertNewExerciseValidator(userSentDetails models.Exercise) ([]ErrorStruct,
 
 }
 
-// DeleteExercise, CreatePlan, AddSetAndReps
-
 func DeleteExerciseValidator() () {
 
 
 }
-
-// {
-// 	"plan_name" :
-// 	"exercise_name" : []
-// }
 
 func CreatePlanValidator(userSentDetails models.UserSentExercises) ([]ErrorStruct, error) {
 	var errors []ErrorStruct
@@ -133,12 +127,6 @@ func CreatePlanValidator(userSentDetails models.UserSentExercises) ([]ErrorStruc
 
 	return errors, nil
 }
-
-// {
-//     "exercise_name" : "incline_lateral_raises",
-//     "rep_count" : 8,
-//     "weight" : 5
-// }
 
 func AddRepsWeightsValidator(userSentDetails models.AddRepsWeights) ([]ErrorStruct, error) {
 	var errors []ErrorStruct
@@ -164,4 +152,17 @@ func AddRepsWeightsValidator(userSentDetails models.AddRepsWeights) ([]ErrorStru
 	}
 
 	return errors, nil
+}
+
+func AddExerciseToPlanValidator(exerciseName string) ([]ErrorStruct, error) {
+
+	var allErrors []ErrorStruct
+	if exerciseName == "" {
+		allErrors = append(allErrors, ErrExerciseNameReq)
+
+		return allErrors, ErrSomeError
+	}
+
+	return allErrors, nil
+
 }

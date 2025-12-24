@@ -82,8 +82,6 @@ func UserSignup(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-
-
 func UserLogin(w http.ResponseWriter, r *http.Request) {
 
 	var userSentDetails models.User
@@ -103,7 +101,7 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("error occured : %v\n", err)
 		
 		response := map[string]string{
-			"message": "error occured",
+			"message": err.Error(),
 		}
 		
 		w.Header().Set("Content-type", "application/json")
@@ -143,7 +141,6 @@ func UserLogin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-
 
 func UserUpdateDetails(w http.ResponseWriter, r *http.Request) {
 
@@ -216,7 +213,6 @@ func DeleteUserByUser(w http.ResponseWriter, r *http.Request) {
 	
 }
 
-
 // exercise handlers
 func GetAllExercises(w http.ResponseWriter, r *http.Request) {
 	response, err := service.GetAllExercisesService()
@@ -236,113 +232,8 @@ func GetAllExercises(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
-func InsertANewExercise(w http.ResponseWriter, r *http.Request) {
-
-	var newExercise models.Exercise
-
-	json.NewDecoder(r.Body).Decode(&newExercise)
-
-	validationErr, err := validations.InsertNewExerciseValidator(newExercise)
-	if err != nil {
-		w.Header().Set("Content-type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(validationErr)
-		return
-	}
-
-	claims, ok :=utils.GetClaimsFromRequest(r.Context())
-	if !ok {
-		response := map[string]string{
-			"message" : "error in getting claims from Request",
-		}
-
-		w.Header().Set("Content-type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return
-	}
-
-	newExercise.UserRole = claims.Role
-
-	response, err := service.InsertANewExerciseService(newExercise)
-	if err != nil{
-		if err == customerrors.ErrOnlyAdminAccess{
-			response := map[string]string{
-				"message" : customerrors.ErrOnlyAdminAccess.Error(),
-			}
-			
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}else {
-			fmt.Printf("error occured : %v\n", err)
-			response := map[string]string{
-				"message" : "error occured",
-			}
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}
-		return
-	}
-
-	w.Header().Set("Content-type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
-	
-}
-
-// needs validation
-func DeleteExercise(w http.ResponseWriter, r *http.Request) {
-
-	claims, ok := utils.GetClaimsFromRequest(r.Context())
-	if !ok {
-		response := map[string]string{
-			"message" : "cannot get claims",
-		}
-	
-		w.Header().Set("Content-type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(response)
-		return	
-	}
-
-	var exerciseName models.Exercise
-
-	json.NewDecoder(r.Body).Decode(&exerciseName)
-
-	exerciseName.UserRole = claims.Role
-
-	err := service.DeleteExerciseService(exerciseName.ExerciseName, exerciseName.UserRole)
-	if err != nil{
-		if err == customerrors.ErrOnlyAdminAccess{
-
-			response := map[string]string{
-				"message" : customerrors.ErrOnlyAdminAccess.Error(),
-			}
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}else {
-			fmt.Printf("error occured : %v", err)
-			response := map[string]string{
-				"message" : "error occured",
-			}
-	
-			w.Header().Set("Content-type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(response)
-		}
-		return
-	}
-	
-	w.Header().Set("Content-type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
-}
-
 // plan handlers
 
-// needs validation
 func CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
@@ -464,6 +355,54 @@ func GetUserPlan(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func AddExerciseToPlan(w http.ResponseWriter, r *http.Request) {
+
+	var exercise models.Exercise
+
+	// exerciseName := r.PathValue("exercisename")
+	planName := r.PathValue("planname")
+
+	
+	claimsFromRequest, ok := utils.GetClaimsFromRequest(r.Context())
+
+	if !ok {
+		response := map[string]string{
+			"message": "error fetching claims from req",
+		}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	json.NewDecoder(r.Body).Decode(&exercise)
+
+	Errors, err := validations.AddExerciseToPlanValidator(exercise.ExerciseName)
+	if err != nil{
+
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(Errors)		
+	}
+
+
+
+	err = service.AddExerciseToPlanService(claimsFromRequest.UserId, planName, exercise.ExerciseName)
+	if err != nil {
+		fmt.Printf("error occured : %v", err)
+		response := map[string]string{
+			"message": err.Error(),
+		}
+		w.Header().Set("Content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	w.Header().Set("Content-type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+}
+
 // session plans
 
 func GetAllExercisesBySession(w http.ResponseWriter, r *http.Request) {
@@ -575,7 +514,6 @@ func EndASession(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// needs validation
 
 func AddSetAndReps(w http.ResponseWriter, r *http.Request) {
 

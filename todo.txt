@@ -1,8 +1,18 @@
+
+- update plan
+    - add an exercise to plan // done
+    - delete an exercie in a plan
+    - update the whole plan
+- delete plan
+
+
+
+
 GetAllExercisesBySessionService
 edit the exercise handlers
 add CRUD to all routes
 
-validations and transformations
+transformations
 
 
 
